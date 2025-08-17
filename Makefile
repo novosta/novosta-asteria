@@ -24,7 +24,7 @@ $(BUILD)/%.o: kernel/%.c
 
 $(ASM): kernel/arch/x86_64/boot.s
 	mkdir -p $(dir $@)
-	$(AS) -f elf64 $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD)/$(KERNEL): $(OBJ) $(ASM)
 	$(LD) $(LDFLAGS) -o $@ $(ASM) $(OBJ)
