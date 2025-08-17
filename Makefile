@@ -12,7 +12,7 @@ ASM := $(BUILD)/boot.o
 CC := clang
 LD := ld.lld
 AS := nasm
-CFLAGS := -target x86_64-elf -ffreestanding -O2 -Wall -Wextra -nostdlib -fno-pic
+CFLAGS := -target x86_64-elf -ffreestanding -O2 -Wall -Wextra -nostdlib -fno-pic -Ikernel/include
 LDFLAGS := -nostdlib -static -T linker.ld
 
 # === Rules ===
