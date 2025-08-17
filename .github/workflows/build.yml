@@ -1,18 +1,27 @@
 name: Build ISO
 
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-    - uses: actions/checkout@v4
-    - name: Install deps
-      run: sudo apt install -y xorriso gcc x86_64-elf-gcc x86_64-elf-binutils make
-    - name: Build ISO
-      run: make
-    - name: Upload ISO
-      uses: actions/upload-artifact@v3
-      with:
-        name: novosta-iso
-        path: novosta.iso
+      - uses: actions/checkout@v4
+
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y make xorriso mtools nasm gcc x86_64-elf-gcc x86_64-elf-binutils
+
+      - name: Build ISO
+        run: make
+
+      - name: Upload ISO artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: novosta-iso
+          path: novosta.iso
+          if-no-files-found: error
