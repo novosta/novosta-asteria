@@ -1,54 +1,74 @@
-# Top-level Makefile for novosta-asteria
+# ===== Novosta Asteria (Linux/CI) =====
 
-TARGET     := novosta.elf
-ISO        := novosta.iso
-LIMINE_CFG := limine.cfg
+# Paths / names
+BUILD       := build
+ISO_DIR     := $(BUILD)/iso
+KERNEL_ELF  := $(BUILD)/novosta.elf
+ISO         := novosta.iso
+LINKER      := linker.ld
+LIMINE_DIR  := limine
+LIMINE_CFG  := boot/limine.cfg
+LIMINE_FILES := $(LIMINE_DIR)/limine.sys \
+                $(LIMINE_DIR)/limine-cd.bin \
+                $(LIMINE_DIR)/limine-eltorito-efi.bin
 
-BUILD_DIR  := build
-ISO_DIR    := $(BUILD_DIR)/iso
+# Tools
+CC      := clang
+LD      := ld.lld
+CFLAGS  := -target x86_64-elf -ffreestanding -fno-pic -O2 -Wall -Wextra -Ikernel/include
+LDFLAGS := -nostdlib -static -T $(LINKER)
 
-CC         := clang
-LD         := ld.lld
-CFLAGS     := -target x86_64-elf -ffreestanding -O2 -Wall -Wextra -nostdlib -fno-pic -Ikernel/include
-LDFLAGS    := -nostdlib -static -T linker.ld
+# Sources (C + GAS .s)
+C_SRCS := $(shell find kernel -name '*.c')
+S_SRCS := $(shell find kernel -name '*.s')
+OBJ_C  := $(patsubst kernel/%.c,$(BUILD)/kernel/%.o,$(C_SRCS))
+OBJ_S  := $(patsubst kernel/%.s,$(BUILD)/kernel/%.o,$(S_SRCS))
+OBJS   := $(OBJ_S) $(OBJ_C)
 
-SRC_C      := \
-    kernel/core/logger.c \
-    kernel/core/main.c \
-    kernel/include/novosta/panic.c \
-    kernel/arch/x86_64/limine_handoff.c
+.PHONY: all iso limine clean run
 
-SRC_S      := \
-    kernel/arch/x86_64/boot.s
+all: iso
 
-OBJ_C      := $(patsubst %.c,$(BUILD_DIR)/%.o,$(SRC_C))
-OBJ_S      := $(patsubst %.s,$(BUILD_DIR)/%.o,$(SRC_S))
+# Compile C
+$(BUILD)/kernel/%.o: kernel/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@
 
-OBJS       := $(OBJ_C) $(OBJ_S)
+# Assemble GAS/AT&T .s with Clang
+$(BUILD)/kernel/%.o: kernel/%.s
+	@mkdir -p $(dir $@)
+	$(CC) -target x86_64-elf -c $< -o $@
 
-.PHONY: all clean run iso
-
-all: $(BUILD_DIR)/$(TARGET)
-
-$(BUILD_DIR)/$(TARGET): $(OBJS)
+# Link kernel
+$(KERNEL_ELF): $(OBJS) $(LINKER)
 	$(LD) $(LDFLAGS) -o $@ $(OBJS)
 
-$(BUILD_DIR)/%.o: %.c
-	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c $< -o $@
+# Fetch & build Limine locally if not present
+limine:
+	@if [ ! -x "$(LIMINE_DIR)/limine-install" ]; then \
+	  echo "==> Fetching & building Limine..."; \
+	  if [ ! -d "$(LIMINE_DIR)" ]; then \
+	    git clone --depth=1 https://github.com/limine-bootloader/limine.git $(LIMINE_DIR); \
+	  fi; \
+	  $(MAKE) -C $(LIMINE_DIR); \
+	fi
 
-$(BUILD_DIR)/%.o: %.s
-	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c $< -o $@
-
-iso: $(BUILD_DIR)/$(TARGET)
+# Build ISO (outputs novosta.iso at repo root)
+iso: $(KERNEL_ELF) limine $(LIMINE_CFG)
 	@mkdir -p $(ISO_DIR)
-	cp $(BUILD_DIR)/$(TARGET) $(ISO_DIR)/kernel.elf
+	cp $(KERNEL_ELF) $(ISO_DIR)/kernel.elf
 	cp $(LIMINE_CFG) $(ISO_DIR)/
-	limine-install $(ISO_DIR)
-
-clean:
-	rm -rf $(BUILD_DIR)
+	cp $(LIMINE_FILES) $(ISO_DIR)/
+	$(LIMINE_DIR)/limine-install $(ISO_DIR)
+	xorriso -as mkisofs \
+		-b limine-cd.bin \
+		-no-emul-boot -boot-load-size 4 -boot-info-table \
+		--efi-boot limine-eltorito-efi.bin \
+		-efi-boot-part --efi-boot-image --protective-msdos-label \
+		-o $(ISO) $(ISO_DIR)
 
 run: iso
-	qemu-system-x86_64 -cdrom $(ISO_DIR)/$(ISO) -m 512M
+	qemu-system-x86_64 -cdrom $(ISO) -m 512M -serial stdio
+
+clean:
+	rm -rf $(BUILD) $(ISO)
