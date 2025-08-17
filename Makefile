@@ -1,10 +1,11 @@
 # === Build Settings ===
 KERNEL := novosta.elf
 ISO := novosta.iso
-ISO_DIR := build/iso
 BUILD := build
+ISO_DIR := $(BUILD)/iso
+
 SRC := $(shell find kernel -name '*.c')
-OBJ := $(patsubst kernel/%, $(BUILD)/kernel/%.o, $(basename $(SRC)))
+OBJ := $(patsubst kernel/%.c, $(BUILD)/%.o, $(SRC))
 ASM := $(BUILD)/boot.o
 
 # === Tools ===
@@ -17,7 +18,7 @@ LDFLAGS := -nostdlib -static -T linker.ld
 # === Rules ===
 all: $(ISO)
 
-$(BUILD)/%.c.o: kernel/%.c
+$(BUILD)/%.o: kernel/%.c
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -25,7 +26,7 @@ $(ASM): kernel/arch/x86_64/boot.s
 	mkdir -p $(dir $@)
 	$(AS) -f elf64 $< -o $@
 
-$(BUILD)/$(KERNEL): $(OBJ) $(ASM) linker.ld
+$(BUILD)/$(KERNEL): $(OBJ) $(ASM)
 	$(LD) $(LDFLAGS) -o $@ $(ASM) $(OBJ)
 
 $(ISO): $(BUILD)/$(KERNEL)
