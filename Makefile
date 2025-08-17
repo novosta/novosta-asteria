@@ -1,4 +1,4 @@
-# ===== Novosta Asteria Makefile (Linux + CI) =====
+# ===== Novosta Asteria Makefile (Linux + GitHub Actions) =====
 
 # Paths / names
 BUILD        := build
@@ -7,8 +7,9 @@ KERNEL_ELF   := $(BUILD)/novosta.elf
 ISO          := novosta.iso
 LINKER       := linker.ld
 
-# Limine (built into build/limine to avoid stale dirs)
+# Limine (use the binary branch which includes a Makefile)
 LIMINE_DIR   := $(BUILD)/limine
+LIMINE_BRANCH:= v9.x-binary
 LIMINE_CFG   := boot/limine.cfg
 LIMINE_FILES := $(LIMINE_DIR)/limine.sys \
                 $(LIMINE_DIR)/limine-cd.bin \
@@ -21,9 +22,9 @@ LD      := ld.lld
 CFLAGS  := -target x86_64-elf -ffreestanding -fno-pic -O2 -Wall -Wextra -Ikernel/include
 LDFLAGS := -nostdlib -static -T $(LINKER)
 
-# Sources
+# Sources (C + GAS .s)
 C_SRCS := $(shell find kernel -name '*.c')
-S_SRCS := $(shell find kernel -name '*.s')   # GAS/AT&T assembled with clang
+S_SRCS := $(shell find kernel -name '*.s')
 OBJ_C  := $(patsubst kernel/%.c,$(BUILD)/kernel/%.o,$(C_SRCS))
 OBJ_S  := $(patsubst kernel/%.s,$(BUILD)/kernel/%.o,$(S_SRCS))
 OBJS   := $(OBJ_S) $(OBJ_C)
@@ -47,11 +48,11 @@ $(KERNEL_ELF): $(OBJS) $(LINKER)
 	@mkdir -p $(dir $@)
 	$(LD) $(LDFLAGS) -o $@ $(OBJS)
 
-# --- Fetch & build Limine into build/limine ---
+# --- Fetch & build Limine (binary branch has Makefile) ---
 $(LIMINE_STAMP):
-	@echo "==> Cloning & building Limine into $(LIMINE_DIR)"
+	@echo "==> Cloning & building Limine ($(LIMINE_BRANCH)) into $(LIMINE_DIR)"
 	@rm -rf $(LIMINE_DIR)
-	@git clone --depth=1 https://github.com/limine-bootloader/limine.git $(LIMINE_DIR)
+	@git clone --depth=1 --branch=$(LIMINE_BRANCH) https://github.com/limine-bootloader/limine.git $(LIMINE_DIR)
 	@$(MAKE) -C $(LIMINE_DIR)
 	@touch $(LIMINE_STAMP)
 
