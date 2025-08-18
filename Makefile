@@ -60,30 +60,41 @@ limine: $(LIMINE_STAMP)
 iso: $(KERNEL_ELF) limine $(LIMINE_CFG)
 	@mkdir -p $(ISO_DIR)
 	cp $(KERNEL_ELF) $(ISO_DIR)/kernel.elf
-	cp $(LIMINE_CFG) $(ISO_DIR)/
+	cp $(LIMINE_CFG) $(ISO_DIR)/limine.cfg
 
 	@set -e; \
-	found_cd=; found_efi=; \
-	for f in limine-cd.bin; do \
+	bios_img=; efi_img=; bios_sys=; \
+	for f in limine-bios-cd.bin limine-cd.bin; do \
 	  for base in "$(LIMINE_DIR)" "$(LIMINE_DIR)/bin"; do \
-	    if [ -f "$${base}/$${f}" ]; then cp "$${base}/$${f}" "$(ISO_DIR)/"; found_cd=1; break; fi; \
+	    if [ -f "$${base}/$${f}" ]; then cp "$${base}/$${f}" "$(ISO_DIR)/"; bios_img="$${f}"; break; fi; \
 	  done; \
+	  [ -n "$${bios_img}" ] && break; \
 	done; \
-	for f in limine-eltorito-efi.bin limine-cd-efi.bin; do \
+	for f in limine-bios.sys limine.sys; do \
 	  for base in "$(LIMINE_DIR)" "$(LIMINE_DIR)/bin"; do \
-	    if [ -f "$${base}/$${f}" ]; then cp "$${base}/$${f}" "$(ISO_DIR)/"; found_efi="$${f}"; break; fi; \
+	    if [ -f "$${base}/$${f}" ]; then cp "$${base}/$${f}" "$(ISO_DIR)/"; bios_sys=1; break; fi; \
 	  done; \
-	  [ -n "$${found_efi}" ] && break; \
+	  [ -n "$${bios_sys}" ] && break; \
 	done; \
-	if [ -z "$${found_cd}" ]; then echo "ERROR: limine-cd.bin not found in $(LIMINE_DIR){,/bin}"; exit 1; fi; \
-	if [ -z "$${found_efi}" ]; then echo "ERROR: EFI boot image not found (looked for limine-eltorito-efi.bin or limine-cd-efi.bin)"; exit 1; fi; \
-	echo "==> Using EFI image: $${found_efi}"; \
+	for f in limine-uefi-cd.bin limine-eltorito-efi.bin limine-cd-efi.bin; do \
+	  for base in "$(LIMINE_DIR)" "$(LIMINE_DIR)/bin"; do \
+	    if [ -f "$${base}/$${f}" ]; then cp "$${base}/$${f}" "$(ISO_DIR)/"; efi_img="$${f}"; break; fi; \
+	  done; \
+	  [ -n "$${efi_img}" ] && break; \
+	done; \
+	if [ -z "$${bios_img}" ]; then echo "ERROR: BIOS boot image not found (looked for limine-bios-cd.bin or limine-cd.bin)"; exit 1; fi; \
+	if [ -z "$${bios_sys}" ]; then echo "ERROR: limine-bios.sys (or limine.sys) not found in $(LIMINE_DIR){,/bin}"; exit 1; fi; \
+	if [ -z "$${efi_img}" ]; then echo "ERROR: EFI boot image not found (looked for limine-uefi-cd.bin, limine-eltorito-efi.bin or limine-cd-efi.bin)"; exit 1; fi; \
+	echo "==> Using BIOS image: $${bios_img}"; \
+	echo "==> Using EFI image: $${efi_img}"; \
 	xorriso -as mkisofs \
-	  -b limine-cd.bin \
+	  -b "$${bios_img}" \
 	  -no-emul-boot -boot-load-size 4 -boot-info-table \
-	  --efi-boot "$${found_efi}" \
+	  --efi-boot "$${efi_img}" \
 	  -efi-boot-part --efi-boot-image --protective-msdos-label \
 	  -o "$(ISO)" "$(ISO_DIR)"
+	# Patch the ISO so Limine's BIOS stage can locate limine.cfg
+	$(LIMINE_DIR)/limine bios-install "$(ISO)"
 
 run: iso
 	qemu-system-x86_64 -cdrom $(ISO) -m 512M -serial stdio
