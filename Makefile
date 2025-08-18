@@ -10,7 +10,7 @@ LINKER       := linker.ld
 # Limine (fetch to build/limine; binary branch ships boot files)
 LIMINE_DIR    := $(BUILD)/limine
 LIMINE_BRANCH := v9.x-binary
-LIMINE_CFG    := boot/limine.cfg
+LIMINE_CFG := boot/LIMINE.cfg
 LIMINE_STAMP  := $(LIMINE_DIR)/.ready
 
 # Tools
@@ -62,11 +62,15 @@ $(LIMINE_STAMP):
 limine: $(LIMINE_STAMP)
 
 # --- Build bootable ISO (no limine-install; El Torito via xorriso) ---
-iso: $(KERNEL_ELF) limine $(LIMINE_CFG)
+iso: $(KERNEL_ELF) limine
 	@mkdir -p $(ISO_DIR)
+	@if [ ! -f "$(LIMINE_CFG)" ]; then \
+	  echo "ERROR: Missing Limine config: $(LIMINE_CFG)"; \
+	  exit 1; \
+	fi
 	cp $(KERNEL_ELF) $(ISO_DIR)/kernel.elf
-	@mkdir -p $(ISO_DIR)/boot
-	cp $(LIMINE_CFG) $(ISO_DIR)/boot/limine.cfg
+	cp $(LIMINE_CFG) $(ISO_DIR)/limine.cfg  # Rename to lowercase inside ISO
+	# (Then copy limine.sys, cd.bin, eltorito-efi.bin, etc.)
 
 	@set -e; \
 	bios_img=; efi_img=; bios_sys=; \
