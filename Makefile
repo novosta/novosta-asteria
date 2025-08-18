@@ -1,4 +1,4 @@
-# ===== Novosta Asteria Makefile (Linux + GitHub Actions) =====
+# ===== Novosta Asteria Makefile (portable, CI-friendly) =====
 
 # Paths / names
 BUILD        := build
@@ -7,14 +7,11 @@ KERNEL_ELF   := $(BUILD)/novosta.elf
 ISO          := novosta.iso
 LINKER       := linker.ld
 
-# Limine (use the binary branch which includes a Makefile)
-LIMINE_DIR   := $(BUILD)/limine
-LIMINE_BRANCH:= v9.x-binary
-LIMINE_CFG   := boot/limine.cfg
-LIMINE_FILES := $(LIMINE_DIR)/limine.sys \
-                $(LIMINE_DIR)/limine-cd.bin \
-                $(LIMINE_DIR)/limine-eltorito-efi.bin
-LIMINE_STAMP := $(LIMINE_DIR)/.built
+# Limine (fetch to build/limine; binary branch has prebuilt boot files)
+LIMINE_DIR    := $(BUILD)/limine
+LIMINE_BRANCH := v9.x-binary              # works; change to v4.x-branch-binary if you prefer
+LIMINE_CFG    := boot/limine.cfg
+LIMINE_STAMP  := $(LIMINE_DIR)/.ready
 
 # Tools
 CC      := clang
@@ -22,7 +19,7 @@ LD      := ld.lld
 CFLAGS  := -target x86_64-elf -ffreestanding -fno-pic -O2 -Wall -Wextra -Ikernel/include
 LDFLAGS := -nostdlib -static -T $(LINKER)
 
-# Sources (C + GAS .s)
+# Sources (C + GAS .s assembled by clang)
 C_SRCS := $(shell find kernel -name '*.c')
 S_SRCS := $(shell find kernel -name '*.s')
 OBJ_C  := $(patsubst kernel/%.c,$(BUILD)/kernel/%.o,$(C_SRCS))
@@ -33,12 +30,12 @@ OBJS   := $(OBJ_S) $(OBJ_C)
 
 all: iso
 
-# --- Compile C files ---
+# --- Compile C ---
 $(BUILD)/kernel/%.o: kernel/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# --- Assemble GAS .s files with clang ---
+# --- Assemble GAS .s with clang ---
 $(BUILD)/kernel/%.o: kernel/%.s
 	@mkdir -p $(dir $@)
 	$(CC) -target x86_64-elf -c $< -o $@
@@ -48,23 +45,30 @@ $(KERNEL_ELF): $(OBJS) $(LINKER)
 	@mkdir -p $(dir $@)
 	$(LD) $(LDFLAGS) -o $@ $(OBJS)
 
-# --- Fetch & build Limine (binary branch has Makefile) ---
+# --- Fetch Limine binary branch into build/limine ---
 $(LIMINE_STAMP):
-	@echo "==> Cloning & building Limine ($(LIMINE_BRANCH)) into $(LIMINE_DIR)"
+	@echo "==> Fetching Limine ($(LIMINE_BRANCH)) into $(LIMINE_DIR)"
 	@rm -rf $(LIMINE_DIR)
 	@git clone --depth=1 --branch=$(LIMINE_BRANCH) https://github.com/limine-bootloader/limine.git $(LIMINE_DIR)
-	@$(MAKE) -C $(LIMINE_DIR)
+	@# Build tools if present (harmless if there's no Makefile)
+	@$(MAKE) -C $(LIMINE_DIR) || true
 	@touch $(LIMINE_STAMP)
 
 limine: $(LIMINE_STAMP)
 
-# --- Build bootable ISO (outputs novosta.iso at repo root) ---
+# --- Build bootable ISO (no limine-install; xorriso handles BIOS+UEFI El Torito) ---
 iso: $(KERNEL_ELF) limine $(LIMINE_CFG)
 	@mkdir -p $(ISO_DIR)
 	cp $(KERNEL_ELF) $(ISO_DIR)/kernel.elf
 	cp $(LIMINE_CFG) $(ISO_DIR)/
-	cp $(LIMINE_FILES) $(ISO_DIR)/
-	$(LIMINE_DIR)/limine-install $(ISO_DIR)
+
+	@set -e; \
+	for f in limine.sys limine-cd.bin limine-eltorito-efi.bin; do \
+	  if   [ -f "$(LIMINE_DIR)/$$f" ]; then cp "$(LIMINE_DIR)/$$f" "$(ISO_DIR)/"; \
+	  elif [ -f "$(LIMINE_DIR)/bin/$$f" ]; then cp "$(LIMINE_DIR)/bin/$$f" "$(ISO_DIR)/"; \
+	  else echo "Missing $$f in $(LIMINE_DIR)"; exit 1; fi; \
+	done
+
 	xorriso -as mkisofs \
 		-b limine-cd.bin \
 		-no-emul-boot -boot-load-size 4 -boot-info-table \
