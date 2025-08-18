@@ -10,10 +10,11 @@ bootloader and draws text using the VGA text buffer.
 - Example build system using Clang and LLD
 
 ## Prerequisites
-- `clang` and `ld.lld`
-- `make`
-- `xorriso` (for ISO creation)
-- `qemu-system-x86_64` (to run the ISO)
+ - `clang` and `ld.lld`
+ - `make`
+ - `git-lfs` (for fetching Limine binaries)
+ - `xorriso` (for ISO creation)
+ - `qemu-system-x86_64` (to run the ISO)
 
 ## Building
 ```sh
