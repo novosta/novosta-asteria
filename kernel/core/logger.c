@@ -8,14 +8,33 @@
 
 static size_t cursor = 0;
 
+static void advance_cursor(void) {
+    if (cursor >= VGA_WIDTH * VGA_HEIGHT) {
+        cursor = 0; // wrap to top-left if we overflow the buffer
+    }
+}
+
 static void print(const char* prefix, const char* msg) {
     const char* p = prefix;
-    while (*p) VGA_MEMORY[cursor++] = (*p++ | 0x0700);
+    while (*p) {
+        VGA_MEMORY[cursor++] = (*p++ | 0x0700);
+        advance_cursor();
+    }
     p = msg;
-    while (*p) VGA_MEMORY[cursor++] = (*p++ | 0x0700);
+    while (*p) {
+        VGA_MEMORY[cursor++] = (*p++ | 0x0700);
+        advance_cursor();
+    }
     VGA_MEMORY[cursor++] = ('\n' | 0x0700); // crude newline
+    advance_cursor();
 }
 
 void log_info(const char* msg)  { print("[INFO] ", msg); }
 void log_debug(const char* msg) { print("[DEBUG] ", msg); }
-void log_panic(const char* msg) { print("[PANIC] ", msg); while (1); }
+__attribute__((noreturn))
+void log_panic(const char* msg) {
+    print("[PANIC] ", msg);
+    for (;;) {
+        __asm__ volatile ("hlt");
+    }
+}
