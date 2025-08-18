@@ -50,6 +50,11 @@ $(LIMINE_STAMP):
 	@echo "==> Fetching Limine ($(LIMINE_BRANCH)) into $(LIMINE_DIR)"
 	@rm -rf $(LIMINE_DIR)
 	@git clone --depth=1 --branch=$(LIMINE_BRANCH) https://github.com/limine-bootloader/limine.git $(LIMINE_DIR)
+	@if git lfs --version >/dev/null 2>&1; then \
+		git -C $(LIMINE_DIR) lfs pull; \
+	else \
+		echo "ERROR: git-lfs is required to fetch Limine binaries." >&2; exit 1; \
+	fi
 	@# Build tools if present (harmless if there's no Makefile)
 	@$(MAKE) -C $(LIMINE_DIR) || true
 	@touch $(LIMINE_STAMP)
