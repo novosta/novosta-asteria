@@ -7,9 +7,9 @@ KERNEL_ELF   := $(BUILD)/novosta.elf
 ISO          := novosta.iso
 LINKER       := linker.ld
 
-# Limine (fetch to build/limine; binary branch has prebuilt boot files)
+# Limine (fetch to build/limine; binary branch ships boot files)
 LIMINE_DIR    := $(BUILD)/limine
-LIMINE_BRANCH := v9.x-binary              # works; change to v4.x-branch-binary if you prefer
+LIMINE_BRANCH := v9.x-binary
 LIMINE_CFG    := boot/limine.cfg
 LIMINE_STAMP  := $(LIMINE_DIR)/.ready
 
@@ -56,25 +56,34 @@ $(LIMINE_STAMP):
 
 limine: $(LIMINE_STAMP)
 
-# --- Build bootable ISO (no limine-install; xorriso handles BIOS+UEFI El Torito) ---
+# --- Build bootable ISO (no limine-install; El Torito via xorriso) ---
 iso: $(KERNEL_ELF) limine $(LIMINE_CFG)
 	@mkdir -p $(ISO_DIR)
 	cp $(KERNEL_ELF) $(ISO_DIR)/kernel.elf
 	cp $(LIMINE_CFG) $(ISO_DIR)/
 
 	@set -e; \
-	for f in limine.sys limine-cd.bin limine-eltorito-efi.bin; do \
-	  if   [ -f "$(LIMINE_DIR)/$$f" ]; then cp "$(LIMINE_DIR)/$$f" "$(ISO_DIR)/"; \
-	  elif [ -f "$(LIMINE_DIR)/bin/$$f" ]; then cp "$(LIMINE_DIR)/bin/$$f" "$(ISO_DIR)/"; \
-	  else echo "Missing $$f in $(LIMINE_DIR)"; exit 1; fi; \
-	done
-
+	found_cd=; found_efi=; \
+	for f in limine-cd.bin; do \
+	  for base in "$(LIMINE_DIR)" "$(LIMINE_DIR)/bin"; do \
+	    if [ -f "$${base}/$${f}" ]; then cp "$${base}/$${f}" "$(ISO_DIR)/"; found_cd=1; break; fi; \
+	  done; \
+	done; \
+	for f in limine-eltorito-efi.bin limine-cd-efi.bin; do \
+	  for base in "$(LIMINE_DIR)" "$(LIMINE_DIR)/bin"; do \
+	    if [ -f "$${base}/$${f}" ]; then cp "$${base}/$${f}" "$(ISO_DIR)/"; found_efi="$${f}"; break; fi; \
+	  done; \
+	  [ -n "$${found_efi}" ] && break; \
+	done; \
+	if [ -z "$${found_cd}" ]; then echo "ERROR: limine-cd.bin not found in $(LIMINE_DIR){,/bin}"; exit 1; fi; \
+	if [ -z "$${found_efi}" ]; then echo "ERROR: EFI boot image not found (looked for limine-eltorito-efi.bin or limine-cd-efi.bin)"; exit 1; fi; \
+	echo "==> Using EFI image: $${found_efi}"; \
 	xorriso -as mkisofs \
-		-b limine-cd.bin \
-		-no-emul-boot -boot-load-size 4 -boot-info-table \
-		--efi-boot limine-eltorito-efi.bin \
-		-efi-boot-part --efi-boot-image --protective-msdos-label \
-		-o $(ISO) $(ISO_DIR)
+	  -b limine-cd.bin \
+	  -no-emul-boot -boot-load-size 4 -boot-info-table \
+	  --efi-boot "$${found_efi}" \
+	  -efi-boot-part --efi-boot-image --protective-msdos-label \
+	  -o "$(ISO)" "$(ISO_DIR)"
 
 run: iso
 	qemu-system-x86_64 -cdrom $(ISO) -m 512M -serial stdio
