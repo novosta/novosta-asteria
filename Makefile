@@ -60,7 +60,7 @@ limine: $(LIMINE_STAMP)
 iso: $(KERNEL_ELF) limine $(LIMINE_CFG)
 	@mkdir -p $(ISO_DIR)
 	cp $(KERNEL_ELF) $(ISO_DIR)/kernel.elf
-	cp $(LIMINE_CFG) $(ISO_DIR)/
+	cp $(LIMINE_CFG) $(ISO_DIR)/limine.cfg
 
 	@set -e; \
 	bios_img=; efi_img=; bios_sys=; \
