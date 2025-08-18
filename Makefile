@@ -93,6 +93,8 @@ iso: $(KERNEL_ELF) limine $(LIMINE_CFG)
 	  --efi-boot "$${efi_img}" \
 	  -efi-boot-part --efi-boot-image --protective-msdos-label \
 	  -o "$(ISO)" "$(ISO_DIR)"
+	# Patch the ISO so Limine's BIOS stage can locate limine.cfg
+	$(LIMINE_DIR)/limine bios-install "$(ISO)"
 
 run: iso
 	qemu-system-x86_64 -cdrom $(ISO) -m 512M -serial stdio
